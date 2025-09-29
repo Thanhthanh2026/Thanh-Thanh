@@ -555,32 +555,29 @@ const Diagram = forwardRef<DiagramRef, DiagramProps>(({ data, keywordNumbers, on
       vy: 0,
     }));
     
-    const simulationSteps = 250;
-    // FIX: Explicitly type `currentNodes` as `DiagramNode[]` to prevent its type from degrading to `unknown[]` within the loop, which caused property access errors on `sourceNode`.
+    const simulationSteps = 300;
     let currentNodes: DiagramNode[] = initialNodes;
-    for (let i = 0; i < simulationSteps; i++) {
-        // FIX: By explicitly typing the return value of the map callback as `DiagramNode`,
-        // we ensure that `currentNodes` is always assigned a `DiagramNode[]`, preventing
-        // its type from degrading to `unknown[]` in subsequent loop iterations.
-        currentNodes = currentNodes.map((node: DiagramNode): DiagramNode => {
+    for (let step = 0; step < simulationSteps; step++) {
+        // Stage 1: Calculate new positions based on forces.
+        const nextNodes = currentNodes.map((node: DiagramNode): DiagramNode => {
             let { x, y, vx, vy } = node;
 
-            // FIX: Explicitly type `otherNode` as `DiagramNode` to resolve a type inference issue within the nested loop, where `currentNodes` could be incorrectly inferred as `unknown[]`.
+            // Repulsion force from other nodes
             currentNodes.forEach((otherNode: DiagramNode) => {
                 if (node.id === otherNode.id) return;
                 const dx = x - otherNode.x;
                 const dy = y - otherNode.y;
                 let distance = Math.sqrt(dx * dx + dy * dy);
                 if (distance < 1) distance = 1;
-                const force = 80000 / (distance * distance);
+                const force = 120000 / (distance * distance); // Stronger repulsion
                 vx += (dx / distance) * force;
                 vy += (dy / distance) * force;
             });
 
+            // Spring force from relationships
             data.relationships.forEach(rel => {
-                const idealDistance = 350;
+                const idealDistance = 300; // Tighter ideal distance
                 if (rel.source === node.id) {
-                    // FIX: Explicitly type `n` as `DiagramNode` to resolve a type inference issue that caused `targetNode` to be of type `unknown`.
                     const targetNode = currentNodes.find((n: DiagramNode) => n.id === rel.target);
                     if (!targetNode) return;
                     const dx = targetNode.x - x;
@@ -591,7 +588,6 @@ const Diagram = forwardRef<DiagramRef, DiagramProps>(({ data, keywordNumbers, on
                     vy += (dy / distance) * force;
                 }
                 if (rel.target === node.id) {
-                    // FIX: Explicitly type `n` as `DiagramNode` to resolve a type inference issue that caused `sourceNode` to be of type `unknown`.
                     const sourceNode = currentNodes.find((n: DiagramNode) => n.id === rel.source);
                     if (!sourceNode) return;
                     const dx = sourceNode.x - x;
@@ -603,20 +599,69 @@ const Diagram = forwardRef<DiagramRef, DiagramProps>(({ data, keywordNumbers, on
                 }
             });
             
+            // Centering force
             vx += (width / 2 - x) * 0.005;
             vy += (height / 2 - y) * 0.005;
 
+            // Apply damping and update position
             vx *= 0.6;
             vy *= 0.6;
             x += vx;
             y += vy;
             
-            const nodeDims = nodeDimensions.get(node.id) || { width: 80, height: 40 };
-            x = Math.max(nodeDims.width / 2, Math.min(width - nodeDims.width / 2, x));
-            y = Math.max(nodeDims.height / 2, Math.min(height - nodeDims.height / 2, y));
-
             return { ...node, x, y, vx, vy };
         });
+
+        // Stage 2: Resolve collisions by adjusting positions directly.
+        const collisionPasses = 5;
+        for (let k = 0; k < collisionPasses; k++) {
+            for (let i = 0; i < nextNodes.length; i++) {
+                for (let j = i + 1; j < nextNodes.length; j++) {
+                    const nodeA = nextNodes[i];
+                    const nodeB = nextNodes[j];
+
+                    const dimsA = nodeDimensions.get(nodeA.id) || { width: 80, height: 40 };
+                    const dimsB = nodeDimensions.get(nodeB.id) || { width: 80, height: 40 };
+
+                    const dx = nodeB.x - nodeA.x;
+                    const dy = nodeB.y - nodeA.y;
+
+                    const minDx = (dimsA.width / 2) + (dimsB.width / 2) + 30; // Horizontal padding
+                    const minDy = (dimsA.height / 2) + (dimsB.height / 2) + 20; // Vertical padding
+
+                    const absDx = Math.abs(dx);
+                    const absDy = Math.abs(dy);
+
+                    if (absDx < minDx && absDy < minDy) {
+                        const overlapX = minDx - absDx;
+                        const overlapY = minDy - absDy;
+                        
+                        // Resolve collision along the axis with the smallest overlap
+                        if (overlapX < overlapY) {
+                            const sign = dx > 0 ? 1 : -1;
+                            const moveX = (overlapX / 2) * sign;
+                            nodeA.x -= moveX;
+                            nodeB.x += moveX;
+                        } else {
+                            const sign = dy > 0 ? 1 : -1;
+                            const moveY = (overlapY / 2) * sign;
+                            nodeA.y -= moveY;
+                            nodeB.y += moveY;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Stage 3: Constrain nodes to SVG boundaries after all adjustments.
+        nextNodes.forEach(node => {
+            const nodeDims = nodeDimensions.get(node.id) || { width: 80, height: 40 };
+            node.x = Math.max(nodeDims.width / 2, Math.min(width - nodeDims.width / 2, node.x));
+            node.y = Math.max(nodeDims.height / 2, Math.min(height - nodeDims.height / 2, node.y));
+        });
+
+        // Set the result for the next iteration.
+        currentNodes = nextNodes;
     }
     setNodes(currentNodes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
