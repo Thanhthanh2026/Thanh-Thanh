@@ -1,0 +1,5 @@
+{
+  "name": "System Writing Generator (Ver 2)",
+  "description": "An application to convert text into a System Writing using Gemini.",
+  "requestFramePermissions": []
+}
