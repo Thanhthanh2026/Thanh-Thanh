@@ -1842,7 +1842,7 @@ useEffect(() => {
                           markerEnd={markerEnd}
                           markerStart={markerStart}
                           strokeDasharray={rel.linkStyle === 'dashed' ? '5,5' : 'none'}
-                          onClick={() => { setEditingLinkStyle(rel); clearPopups(); setLinkingNodeId(null); }}
+                          onClick={() => { clearPopups(); setEditingLinkStyle(rel); setLinkingNodeId(null); }}
                       />
                       {isEditing ? (
                           <InlineEditor 
@@ -1856,7 +1856,7 @@ useEffect(() => {
                             className="relationship-label-group" 
                             transform={`translate(${labelPosition.x}, ${labelPosition.y})`} 
                             onMouseDown={(e) => handleRelationshipMouseDown(e, rel.id)}
-                            onClick={(e) => { e.stopPropagation(); setSelectedItem({ type: 'relationship', key: rel.id }); clearPopups(); setLinkingNodeId(null); }}
+                            onClick={(e) => { e.stopPropagation(); clearPopups(); setSelectedItem({ type: 'relationship', key: rel.id }); setLinkingNodeId(null); }}
                           >
                             <rect x={-textWidth/2 - 2} y={-10} width={textWidth + 4} height={15} fill="var(--surface-color)"/>
                             <text className="link-label">{labelWithNumber}</text>
